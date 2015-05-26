@@ -402,8 +402,10 @@
 (define-method (next-indices (cmd <jcc>) k labels)
   (let [(target (assq-ref labels (get-target cmd)))]
     (if (eq? #xeb (get-code8 cmd)) (list target) (list (1+ k) target))))
+(define-syntax-rule (timeit s x)
+  (begin (format #t "~a ..." s) (let [(retval x)] (format #t " done~&") retval)))
 (define (live-analysis prog)
-  (letrec* [(inputs    (map input prog))
+  (timeit "live" (letrec* [(inputs    (map input prog))
             (outputs   (map output prog))
             (indices   (iota (length prog)))
             (lut       (labels prog))
@@ -414,8 +416,8 @@
                            (union in (difference (apply union (map (cut list-ref value <>) ind)) out)))))
             (initial   (map (const '()) prog))
             (iteration (lambda (value) (map (track value) inputs flow outputs)))]
-    (map union (fixed-point initial iteration same?) outputs)))
-(define (interference-graph live) (delete-duplicates (concatenate (map product live live))))
+    (map union (fixed-point initial iteration same?) outputs))))
+(define (interference-graph live) (timeit "interference-graph" (delete-duplicates (concatenate (map product live live)))))
 (define default-registers (list RAX RCX RDX RSI RDI R10 R11 R9 R8 RBX RBP R12 R13 R14 R15))
 (define (callee-saved registers)
   (lset-intersection eq? (delete-duplicates registers) (list RBX RSP RBP R12 R13 R14 R15)))
@@ -479,7 +481,7 @@
 (define* (register-allocate prog #:key (predefined '()) (registers default-registers) (parameters '()) (offset -8))
   (let* [(live       (live-analysis prog))
          (conflicts  (interference-graph live))
-         (colors     (color-graph conflicts registers #:predefined predefined))
+         (colors     (timeit "color-graph" (color-graph conflicts registers #:predefined predefined)))
          (unassigned (find (compose not cdr) (reverse colors)))]
     (if unassigned
       (let* [(participants ((adjacent conflicts) (car unassigned)))
